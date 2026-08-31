@@ -10,6 +10,7 @@ const ASPECTS = [
 const MIN_ROW = 0.12
 const MIN_CELL = 0.12
 const makeColumns = (count) => Array.from({ length: count }, () => 1 / count)
+const EXPORT_SIZES = [{ width: 1080, height: 1350 }, { width: 1080, height: 1080 }, { width: 1080, height: 566 }, { width: 1080, height: 1920 }]
 const defaultTransform = () => ({ x: 0, y: 0, scale: 1 })
 
 function ImageCell({ image, onUpload, onUpdate, onClear, label }) {
@@ -88,6 +89,9 @@ function App() {
   const [aspectIndex, setAspectIndex] = useState(0)
   const [activeRowId, setActiveRowId] = useState(null)
   const [images, setImages] = useState({})
+  const [exportFormat, setExportFormat] = useState('jpg')
+  const [exportQuality, setExportQuality] = useState(90)
+  const [exporting, setExporting] = useState(false)
   const canvasRef = useRef(null)
 
   const updateRows = (updater) => setRows((currentRows) => updater(currentRows))
@@ -103,6 +107,72 @@ function App() {
     delete nextImages[cellId]
     return nextImages
   })
+
+  const loadImage = (src) => new Promise((resolve, reject) => {
+    const image = new Image()
+    image.onload = () => resolve(image)
+    image.onerror = reject
+    image.src = src
+  })
+
+  const createExportBlob = async () => {
+    const { width, height } = EXPORT_SIZES[aspectIndex]
+    const canvas = document.createElement('canvas')
+    canvas.width = width
+    canvas.height = height
+    const context = canvas.getContext('2d')
+    context.fillStyle = '#283129'
+    context.fillRect(0, 0, width, height)
+    const frame = canvasRef.current.getBoundingClientRect()
+    const loadedImages = new Map(await Promise.all(Object.entries(images).map(async ([cellId, image]) => [cellId, [await loadImage(image.src), image]])))
+    let rowTop = 0
+    rows.forEach((row) => {
+      let cellLeft = 0
+      const rowHeight = row.size * height
+      row.columns.forEach((column, columnIndex) => {
+        const cellWidth = column * width
+        const cellId = `${row.id}-${columnIndex}`
+        const loaded = loadedImages.get(cellId)
+        if (loaded) {
+          const [imageElement, transform] = loaded
+          const scale = Math.max(cellWidth / imageElement.naturalWidth, rowHeight / imageElement.naturalHeight)
+          const drawWidth = imageElement.naturalWidth * scale
+          const drawHeight = imageElement.naturalHeight * scale
+          context.save()
+          context.beginPath()
+          context.rect(cellLeft, rowTop, cellWidth, rowHeight)
+          context.clip()
+          context.translate(cellLeft + cellWidth / 2 + transform.x * width / frame.width, rowTop + rowHeight / 2 + transform.y * width / frame.width)
+          context.scale(transform.scale, transform.scale)
+          context.drawImage(imageElement, -drawWidth / 2, -drawHeight / 2, drawWidth, drawHeight)
+          context.restore()
+        }
+        cellLeft += cellWidth
+      })
+      rowTop += rowHeight
+    })
+    return new Promise((resolve) => canvas.toBlob(resolve, exportFormat === 'png' ? 'image/png' : 'image/jpeg', exportFormat === 'png' ? undefined : exportQuality / 100))
+  }
+
+  const downloadExport = async () => {
+    setExporting(true)
+    const blob = await createExportBlob()
+    const link = document.createElement('a')
+    link.href = URL.createObjectURL(blob)
+    link.download = `imggridly-${ASPECTS[aspectIndex].label.toLowerCase().replaceAll(' ', '-')}.${exportFormat}`
+    link.click()
+    URL.revokeObjectURL(link.href)
+    setExporting(false)
+  }
+
+  const shareExport = async () => {
+    setExporting(true)
+    const blob = await createExportBlob()
+    const file = new File([blob], `imggridly-collage.${exportFormat}`, { type: blob.type })
+    if (navigator.canShare?.({ files: [file] }) && navigator.share) await navigator.share({ files: [file], title: 'ImgGridly collage' })
+    else await downloadExport()
+    setExporting(false)
+  }
 
   const addRow = () => updateRows((currentRows) => {
     const size = 1 / (currentRows.length + 1)
@@ -160,7 +230,7 @@ function App() {
   }
 
   return <main className="app-shell">
-    <header className="topbar"><div className="brand"><span className="brand-mark">/</span>ImgGridly</div><button className="export-button" type="button">Export</button></header>
+    <header className="topbar"><div className="brand"><span className="brand-mark">/</span>ImgGridly</div></header>
     <section className="workspace" aria-label="Collage editor">
       <div ref={canvasRef} className="collage-frame" style={{ '--frame-ratio': ASPECTS[aspectIndex].ratio, aspectRatio: ASPECTS[aspectIndex].value }}>
         {rows.map((row, rowIndex) => <div className={`grid-row ${activeRowId === row.id ? 'is-active' : ''}`} key={row.id} style={{ flex: row.size }} onClick={() => setActiveRowId(row.id)}>
@@ -178,6 +248,12 @@ function App() {
       <div className="layout-controls">
         <div><span className="panel-label">Rows</span><div className="stepper"><button type="button" onClick={removeRow} disabled={rows.length === 1} aria-label="Remove row">-</button><output>{rows.length}</output><button type="button" onClick={addRow} aria-label="Add row">+</button></div></div>
         <div><span className="panel-label">Columns {activeRow ? `in row ${rows.findIndex((row) => row.id === activeRowId) + 1}` : ''}</span><div className="stepper"><button type="button" onClick={() => activeRowId && changeColumns(activeRowId, -1)} disabled={!activeRow || activeRow.columns.length === 1} aria-label="Remove column">-</button><output>{activeRow?.columns.length ?? '-'}</output><button type="button" onClick={() => activeRowId && changeColumns(activeRowId, 1)} disabled={!activeRow} aria-label="Add column">+</button></div></div>
+      </div>
+      <div className="export-sheet" aria-label="Export collage">
+        <div className="export-heading"><div><span className="panel-label">Export collage</span><strong>{ASPECTS[aspectIndex].dimensions}</strong></div></div>
+        <div className="format-toggle"><button type="button" className={exportFormat === 'jpg' ? 'is-selected' : ''} onClick={() => setExportFormat('jpg')}>JPG</button><button type="button" className={exportFormat === 'png' ? 'is-selected' : ''} onClick={() => setExportFormat('png')}>PNG</button></div>
+        {exportFormat === 'jpg' && <label className="quality-control">Quality <output>{exportQuality}%</output><input type="range" min="10" max="100" value={exportQuality} onChange={(event) => setExportQuality(Number(event.target.value))} /></label>}
+        <div className="export-actions"><button type="button" onClick={downloadExport} disabled={exporting}>{exporting ? 'Rendering...' : 'Download'}</button><button type="button" className="share-button" onClick={shareExport} disabled={exporting}>Share</button></div>
       </div>
     </section>
   </main>
