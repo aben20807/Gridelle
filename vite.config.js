@@ -4,6 +4,7 @@ import { VitePWA } from 'vite-plugin-pwa'
 
 // https://vite.dev/config/
 export default defineConfig({
+  base: '/Gridelle/',
   plugins: [
     react(),
     VitePWA({
@@ -20,7 +21,7 @@ export default defineConfig({
         theme_color: '#141714',
         background_color: '#141714',
         display: 'standalone',
-        start_url: '/',
+        start_url: './',
         icons: [
           { src: '/favicon.svg', sizes: 'any', type: 'image/svg+xml', purpose: 'any maskable' },
         ],
