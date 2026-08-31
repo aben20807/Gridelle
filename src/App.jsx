@@ -146,6 +146,7 @@ function App() {
         if (loaded) {
           const [imageElement, transform] = loaded
           const scale = Math.max(cellWidth / imageElement.naturalWidth, rowHeight / imageElement.naturalHeight)
+          const drawWidth = imageElement.naturalWidth * scale
           const drawHeight = imageElement.naturalHeight * scale
           context.save()
           context.beginPath()
@@ -195,22 +196,34 @@ function App() {
 
   const downloadExport = async () => {
     setExporting(true)
-    const blob = await createExportBlob()
-    const link = document.createElement('a')
-    link.href = URL.createObjectURL(blob)
-    link.download = `imggridly-${ASPECTS[aspectIndex].label.toLowerCase().replaceAll(' ', '-')}.${exportFormat}`
-    link.click()
-    URL.revokeObjectURL(link.href)
-    setExporting(false)
+    try {
+      const blob = await createExportBlob()
+      const link = document.createElement('a')
+      link.href = URL.createObjectURL(blob)
+      link.download = `imggridly-${ASPECTS[aspectIndex].label.toLowerCase().replaceAll(' ', '-')}.${exportFormat}`
+      link.click()
+      URL.revokeObjectURL(link.href)
+    } finally {
+      setExporting(false)
+    }
   }
 
   const shareExport = async () => {
     setExporting(true)
-    const blob = await createExportBlob()
-    const file = new File([blob], `imggridly-collage.${exportFormat}`, { type: blob.type })
-    if (navigator.canShare?.({ files: [file] }) && navigator.share) await navigator.share({ files: [file], title: 'ImgGridly collage' })
-    else await downloadExport()
-    setExporting(false)
+    try {
+      const blob = await createExportBlob()
+      const file = new File([blob], `imggridly-collage.${exportFormat}`, { type: blob.type })
+      if (navigator.canShare?.({ files: [file] }) && navigator.share) await navigator.share({ files: [file], title: 'ImgGridly collage' })
+      else {
+        const link = document.createElement('a')
+        link.href = URL.createObjectURL(blob)
+        link.download = file.name
+        link.click()
+        URL.revokeObjectURL(link.href)
+      }
+    } finally {
+      setExporting(false)
+    }
   }
 
   const addRow = () => updateRows((currentRows) => {
