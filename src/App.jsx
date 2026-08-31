@@ -4,7 +4,7 @@ import './App.css'
 const ASPECTS = [
   { label: 'Portrait', dimensions: '1080 x 1350', value: '4 / 5', ratio: 0.8 },
   { label: 'Square', dimensions: '1080 x 1080', value: '1 / 1', ratio: 1 },
-  { label: 'Landscape', dimensions: '1080 x 566', value: '1.91 / 1', ratio: 1.91 },
+  { label: 'Landscape', dimensions: '1080 x 566', value: '1080 / 566', ratio: 1080 / 566 },
   { label: 'Stories & Reels', dimensions: '1080 x 1920', value: '9 / 16', ratio: 0.5625 },
 ]
 const MIN_ROW = 0.12
@@ -152,7 +152,7 @@ function App() {
           context.beginPath()
           context.rect(cellLeft, rowTop, cellWidth, rowHeight)
           context.clip()
-          context.translate(cellLeft + cellWidth / 2 + transform.x * width / frame.width, rowTop + rowHeight / 2 + transform.y * width / frame.width)
+          context.translate(cellLeft + cellWidth / 2 + transform.x * width / frame.width, rowTop + rowHeight / 2 + transform.y * height / frame.height)
           context.scale(transform.scale, transform.scale)
           context.drawImage(imageElement, -drawWidth / 2, -drawHeight / 2, drawWidth, drawHeight)
           context.restore()
