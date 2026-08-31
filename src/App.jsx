@@ -12,6 +12,12 @@ const MIN_CELL = 0.12
 const makeColumns = (count) => Array.from({ length: count }, () => 1 / count)
 const EXPORT_SIZES = [{ width: 1080, height: 1350 }, { width: 1080, height: 1080 }, { width: 1080, height: 566 }, { width: 1080, height: 1920 }]
 const defaultTransform = () => ({ x: 0, y: 0, scale: 1 })
+const getForegroundColor = (hexColor) => {
+  const red = Number.parseInt(hexColor.slice(1, 3), 16)
+  const green = Number.parseInt(hexColor.slice(3, 5), 16)
+  const blue = Number.parseInt(hexColor.slice(5, 7), 16)
+  return (red * 299 + green * 587 + blue * 114) / 1000 > 150 ? '#141714' : '#f4f6f1'
+}
 
 function ImageCell({ image, onUpload, onUpdate, onClear, label }) {
   const inputRef = useRef(null)
@@ -89,6 +95,7 @@ function App() {
   const [aspectIndex, setAspectIndex] = useState(0)
   const [activeRowId, setActiveRowId] = useState(null)
   const [images, setImages] = useState({})
+  const [emptyCellColor, setEmptyCellColor] = useState('#ffffff')
   const [exportFormat, setExportFormat] = useState('jpg')
   const [exportQuality, setExportQuality] = useState(90)
   const [exporting, setExporting] = useState(false)
@@ -146,6 +153,9 @@ function App() {
           context.scale(transform.scale, transform.scale)
           context.drawImage(imageElement, -drawWidth / 2, -drawHeight / 2, drawWidth, drawHeight)
           context.restore()
+        } else {
+          context.fillStyle = emptyCellColor
+          context.fillRect(cellLeft, rowTop, cellWidth, rowHeight)
         }
         cellLeft += cellWidth
       })
@@ -234,7 +244,7 @@ function App() {
     <section className="workspace" aria-label="Collage editor">
       <div ref={canvasRef} className="collage-frame" style={{ '--frame-ratio': ASPECTS[aspectIndex].ratio, aspectRatio: ASPECTS[aspectIndex].value }}>
         {rows.map((row, rowIndex) => <div className={`grid-row ${activeRowId === row.id ? 'is-active' : ''}`} key={row.id} style={{ flex: row.size }} onClick={() => setActiveRowId(row.id)}>
-          {row.columns.map((column, columnIndex) => <div className="grid-cell" key={`${row.id}-${columnIndex}`} style={{ flex: column }}>
+          {row.columns.map((column, columnIndex) => <div className="grid-cell" key={`${row.id}-${columnIndex}`} style={{ flex: column, backgroundColor: images[`${row.id}-${columnIndex}`] ? undefined : emptyCellColor, '--cell-foreground': getForegroundColor(emptyCellColor) }}>
             <ImageCell image={images[`${row.id}-${columnIndex}`]} onUpload={(src) => uploadImage(`${row.id}-${columnIndex}`, src)} onUpdate={(image) => updateImage(`${row.id}-${columnIndex}`, image)} onClear={() => clearImage(`${row.id}-${columnIndex}`)} label={`row ${rowIndex + 1}, cell ${columnIndex + 1}`} />
             {columnIndex < row.columns.length - 1 && <div className="column-divider" role="separator" aria-orientation="vertical" onPointerDown={(event) => startColumnResize(event, row.id, columnIndex)} />}
           </div>)}
@@ -249,6 +259,7 @@ function App() {
         <div><span className="panel-label">Rows</span><div className="stepper"><button type="button" onClick={removeRow} disabled={rows.length === 1} aria-label="Remove row">-</button><output>{rows.length}</output><button type="button" onClick={addRow} aria-label="Add row">+</button></div></div>
         <div><span className="panel-label">Columns {activeRow ? `in row ${rows.findIndex((row) => row.id === activeRowId) + 1}` : ''}</span><div className="stepper"><button type="button" onClick={() => activeRowId && changeColumns(activeRowId, -1)} disabled={!activeRow || activeRow.columns.length === 1} aria-label="Remove column">-</button><output>{activeRow?.columns.length ?? '-'}</output><button type="button" onClick={() => activeRowId && changeColumns(activeRowId, 1)} disabled={!activeRow} aria-label="Add column">+</button></div></div>
       </div>
+      <label className="empty-color-control"><span className="panel-label">Empty cell color</span><span className="color-picker"><input type="color" value={emptyCellColor} onChange={(event) => setEmptyCellColor(event.target.value)} aria-label="Empty cell color" /><output>{emptyCellColor.toUpperCase()}</output></span></label>
       <div className="export-sheet" aria-label="Export collage">
         <div className="export-heading"><div><span className="panel-label">Export collage</span><strong>{ASPECTS[aspectIndex].dimensions}</strong></div></div>
         <div className="format-toggle"><button type="button" className={exportFormat === 'jpg' ? 'is-selected' : ''} onClick={() => setExportFormat('jpg')}>JPG</button><button type="button" className={exportFormat === 'png' ? 'is-selected' : ''} onClick={() => setExportFormat('png')}>PNG</button></div>
