@@ -4,7 +4,7 @@ import './App.css'
 const ASPECTS = [
   { label: 'Portrait', dimensions: '1080 x 1350', value: '4 / 5', ratio: 0.8 },
   { label: 'Square', dimensions: '1080 x 1080', value: '1 / 1', ratio: 1 },
-  { label: 'Feed Landscape', dimensions: '1080 x 566', value: '1.91 / 1', ratio: 1.91 },
+  { label: 'Landscape', dimensions: '1080 x 566', value: '1.91 / 1', ratio: 1.91 },
   { label: 'Stories & Reels', dimensions: '1080 x 1920', value: '9 / 16', ratio: 0.5625 },
 ]
 const MIN_ROW = 0.12
@@ -200,7 +200,7 @@ function App() {
       const blob = await createExportBlob()
       const link = document.createElement('a')
       link.href = URL.createObjectURL(blob)
-      link.download = `imggridly-${ASPECTS[aspectIndex].label.toLowerCase().replaceAll(' ', '-')}.${exportFormat}`
+      link.download = `gridelle-${ASPECTS[aspectIndex].label.toLowerCase().replaceAll(' ', '-')}.${exportFormat}`
       link.click()
       URL.revokeObjectURL(link.href)
     } finally {
@@ -212,8 +212,8 @@ function App() {
     setExporting(true)
     try {
       const blob = await createExportBlob()
-      const file = new File([blob], `imggridly-collage.${exportFormat}`, { type: blob.type })
-      if (navigator.canShare?.({ files: [file] }) && navigator.share) await navigator.share({ files: [file], title: 'ImgGridly collage' })
+      const file = new File([blob], `gridelle-collage.${exportFormat}`, { type: blob.type })
+      if (navigator.canShare?.({ files: [file] }) && navigator.share) await navigator.share({ files: [file], title: 'Gridelle collage' })
       else {
         const link = document.createElement('a')
         link.href = URL.createObjectURL(blob)
@@ -282,7 +282,7 @@ function App() {
   }
 
   return <main className="app-shell">
-    <header className="topbar"><div className="brand"><span className="brand-mark" aria-hidden="true"><i /><i /><i /><i /></span><span>ImgGridly</span></div></header>
+    <header className="topbar"><div className="brand"><span className="brand-mark" aria-hidden="true"><i /><i /><i /><i /></span><span>Gridelle</span></div></header>
     <section className="workspace" aria-label="Collage editor">
       <div ref={canvasRef} className="collage-frame" style={{ '--frame-ratio': ASPECTS[aspectIndex].ratio, '--divider-thickness': `${dividerThickness}px`, '--divider-color': dividerColor, '--outer-line': showOuterLine ? `${dividerThickness}px` : '0px', aspectRatio: ASPECTS[aspectIndex].value }}>
         {rows.map((row, rowIndex) => <div className={`grid-row ${activeRowId === row.id ? 'is-active' : ''}`} key={row.id} style={{ flex: row.size }} onClick={() => setActiveRowId(row.id)}>

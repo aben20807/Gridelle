@@ -14,8 +14,8 @@ export default defineConfig({
         navigateFallback: '/index.html',
       },
       manifest: {
-        name: 'ImgGridly - Image Collage Editor',
-        short_name: 'ImgGridly',
+        name: 'Gridelle - Image Collage Editor',
+        short_name: 'Gridelle',
         description: 'Create flexible image collages locally in your browser.',
         theme_color: '#141714',
         background_color: '#141714',

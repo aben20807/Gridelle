@@ -1,16 +1,54 @@
-# React + Vite
+# Gridelle
 
-This template provides a minimal setup to get React working in Vite with HMR and some Oxlint rules.
+A browser-only image collage editor for Instagram formats. Build flexible photo grids, adjust each image in place, and export a high-resolution JPG or PNG.
 
-Currently, two official plugins are available:
+## Privacy
 
-- [@vitejs/plugin-react](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react) uses [Oxc](https://oxc.rs)
-- [@vitejs/plugin-react-swc](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react-swc) uses [SWC](https://swc.rs/)
+Gridelle has no backend, account system, analytics, or cloud storage. Images remain in browser memory and are never uploaded.
 
-## React Compiler
+## Features
 
-The React Compiler is not enabled on this template because of its impact on dev & build performances. To add it, see [this documentation](https://react.dev/learn/react-compiler/installation).
+- Instagram canvas formats: Portrait (`1080 x 1350`), Square (`1080 x 1080`), Landscape (`1080 x 566`), and Stories & Reels (`1080 x 1920`)
+- Add or remove rows and set the column count for each row independently
+- Drag row and column dividers to resize adjacent cells
+- Configure divider thickness, color, and optional outer border
+- Choose an empty-cell background color with automatic readable upload-control contrast
+- Upload, replace, clear, pan, pinch-zoom, scroll-zoom, or reset an image per cell
+- Export true-resolution JPG with a quality control or PNG
+- Download locally or share through the Web Share API where supported
+- Installable PWA with offline app-shell support and online service-worker updates
 
-## Expanding the Oxlint configuration
+## Development
 
-If you are developing a production application, we recommend using TypeScript with type-aware lint rules enabled. Check out the [TS template](https://github.com/vitejs/vite/tree/main/packages/create-vite/template-react-ts) for information on how to integrate TypeScript and Oxlint's TypeScript related rules in your project.
+Requires Node.js 22 or later.
+
+```bash
+npm install
+npm run dev
+```
+
+Additional commands:
+
+```bash
+npm run build
+npm run preview
+npm run lint
+```
+
+## GitHub Pages Deployment
+
+The workflow at [`.github/workflows/deploy-gh-pages.yml`](.github/workflows/deploy-gh-pages.yml) publishes a production build to the `gh-pages` branch whenever a tag beginning with `v` is pushed.
+
+```bash
+git tag v1.0.0
+git push origin v1.0.0
+```
+
+In the repository settings, configure GitHub Pages to deploy from the `gh-pages` branch. GitHub Actions must also be allowed to use a read/write `GITHUB_TOKEN`.
+
+## Technology
+
+- React 19
+- Vite
+- HTML Canvas export
+- Vite PWA / Workbox
