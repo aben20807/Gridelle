@@ -282,7 +282,7 @@ function App() {
   }
 
   return <main className="app-shell">
-    <header className="topbar"><div className="brand"><span className="brand-mark">/</span>ImgGridly</div></header>
+    <header className="topbar"><div className="brand"><span className="brand-mark" aria-hidden="true"><i /><i /><i /><i /></span><span>ImgGridly</span></div></header>
     <section className="workspace" aria-label="Collage editor">
       <div ref={canvasRef} className="collage-frame" style={{ '--frame-ratio': ASPECTS[aspectIndex].ratio, '--divider-thickness': `${dividerThickness}px`, '--divider-color': dividerColor, '--outer-line': showOuterLine ? `${dividerThickness}px` : '0px', aspectRatio: ASPECTS[aspectIndex].value }}>
         {rows.map((row, rowIndex) => <div className={`grid-row ${activeRowId === row.id ? 'is-active' : ''}`} key={row.id} style={{ flex: row.size }} onClick={() => setActiveRowId(row.id)}>
