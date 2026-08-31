@@ -96,6 +96,9 @@ function App() {
   const [activeRowId, setActiveRowId] = useState(null)
   const [images, setImages] = useState({})
   const [emptyCellColor, setEmptyCellColor] = useState('#ffffff')
+  const [dividerThickness, setDividerThickness] = useState(0)
+  const [dividerColor, setDividerColor] = useState('#151814')
+  const [showOuterLine, setShowOuterLine] = useState(true)
   const [exportFormat, setExportFormat] = useState('jpg')
   const [exportQuality, setExportQuality] = useState(90)
   const [exporting, setExporting] = useState(false)
@@ -143,7 +146,6 @@ function App() {
         if (loaded) {
           const [imageElement, transform] = loaded
           const scale = Math.max(cellWidth / imageElement.naturalWidth, rowHeight / imageElement.naturalHeight)
-          const drawWidth = imageElement.naturalWidth * scale
           const drawHeight = imageElement.naturalHeight * scale
           context.save()
           context.beginPath()
@@ -161,6 +163,33 @@ function App() {
       })
       rowTop += rowHeight
     })
+    if (dividerThickness > 0) {
+      context.strokeStyle = dividerColor
+      context.lineWidth = dividerThickness * width / frame.width
+      context.beginPath()
+      let horizontalTop = 0
+      rows.forEach((row, index) => {
+        horizontalTop += row.size * height
+        if (index < rows.length - 1) {
+          context.moveTo(0, horizontalTop)
+          context.lineTo(width, horizontalTop)
+        }
+      })
+      let verticalRowTop = 0
+      rows.forEach((row) => {
+        let verticalLeft = 0
+        row.columns.forEach((column, index) => {
+          verticalLeft += column * width
+          if (index < row.columns.length - 1) {
+            context.moveTo(verticalLeft, verticalRowTop)
+            context.lineTo(verticalLeft, verticalRowTop + row.size * height)
+          }
+        })
+        verticalRowTop += row.size * height
+      })
+      if (showOuterLine) context.rect(0, 0, width, height)
+      context.stroke()
+    }
     return new Promise((resolve) => canvas.toBlob(resolve, exportFormat === 'png' ? 'image/png' : 'image/jpeg', exportFormat === 'png' ? undefined : exportQuality / 100))
   }
 
@@ -242,7 +271,7 @@ function App() {
   return <main className="app-shell">
     <header className="topbar"><div className="brand"><span className="brand-mark">/</span>ImgGridly</div></header>
     <section className="workspace" aria-label="Collage editor">
-      <div ref={canvasRef} className="collage-frame" style={{ '--frame-ratio': ASPECTS[aspectIndex].ratio, aspectRatio: ASPECTS[aspectIndex].value }}>
+      <div ref={canvasRef} className="collage-frame" style={{ '--frame-ratio': ASPECTS[aspectIndex].ratio, '--divider-thickness': `${dividerThickness}px`, '--divider-color': dividerColor, '--outer-line': showOuterLine ? `${dividerThickness}px` : '0px', aspectRatio: ASPECTS[aspectIndex].value }}>
         {rows.map((row, rowIndex) => <div className={`grid-row ${activeRowId === row.id ? 'is-active' : ''}`} key={row.id} style={{ flex: row.size }} onClick={() => setActiveRowId(row.id)}>
           {row.columns.map((column, columnIndex) => <div className="grid-cell" key={`${row.id}-${columnIndex}`} style={{ flex: column, backgroundColor: images[`${row.id}-${columnIndex}`] ? undefined : emptyCellColor, '--cell-foreground': getForegroundColor(emptyCellColor) }}>
             <ImageCell image={images[`${row.id}-${columnIndex}`]} onUpload={(src) => uploadImage(`${row.id}-${columnIndex}`, src)} onUpdate={(image) => updateImage(`${row.id}-${columnIndex}`, image)} onClear={() => clearImage(`${row.id}-${columnIndex}`)} label={`row ${rowIndex + 1}, cell ${columnIndex + 1}`} />
@@ -258,7 +287,9 @@ function App() {
       <div className="layout-controls">
         <div><span className="panel-label">Rows</span><div className="stepper"><button type="button" onClick={removeRow} disabled={rows.length === 1} aria-label="Remove row">-</button><output>{rows.length}</output><button type="button" onClick={addRow} aria-label="Add row">+</button></div></div>
         <div><span className="panel-label">Columns {activeRow ? `in row ${rows.findIndex((row) => row.id === activeRowId) + 1}` : ''}</span><div className="stepper"><button type="button" onClick={() => activeRowId && changeColumns(activeRowId, -1)} disabled={!activeRow || activeRow.columns.length === 1} aria-label="Remove column">-</button><output>{activeRow?.columns.length ?? '-'}</output><button type="button" onClick={() => activeRowId && changeColumns(activeRowId, 1)} disabled={!activeRow} aria-label="Add column">+</button></div></div>
+        <div><span className="panel-label">Thickness</span><div className="stepper"><button type="button" onClick={() => setDividerThickness((value) => Math.max(1, value - 1))} disabled={dividerThickness === 1} aria-label="Decrease divider thickness">-</button><output>{dividerThickness}</output><button type="button" onClick={() => setDividerThickness((value) => Math.min(12, value + 1))} disabled={dividerThickness === 12} aria-label="Increase divider thickness">+</button></div></div>
       </div>
+      <div className="divider-options"><label className="empty-color-control"><span className="panel-label">Divider color</span><span className="color-picker"><input type="color" value={dividerColor} onChange={(event) => setDividerColor(event.target.value)} aria-label="Divider color" /><output>{dividerColor.toUpperCase()}</output></span></label><label className="line-toggle"><span><span className="panel-label">Outer line</span><small>Show around canvas</small></span><input type="checkbox" checked={showOuterLine} onChange={(event) => setShowOuterLine(event.target.checked)} /></label></div>
       <label className="empty-color-control"><span className="panel-label">Empty cell color</span><span className="color-picker"><input type="color" value={emptyCellColor} onChange={(event) => setEmptyCellColor(event.target.value)} aria-label="Empty cell color" /><output>{emptyCellColor.toUpperCase()}</output></span></label>
       <div className="export-sheet" aria-label="Export collage">
         <div className="export-heading"><div><span className="panel-label">Export collage</span><strong>{ASPECTS[aspectIndex].dimensions}</strong></div></div>
