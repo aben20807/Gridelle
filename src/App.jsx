@@ -10,6 +10,75 @@ const ASPECTS = [
 const MIN_ROW = 0.12
 const MIN_CELL = 0.12
 const makeColumns = (count) => Array.from({ length: count }, () => 1 / count)
+const defaultTransform = () => ({ x: 0, y: 0, scale: 1 })
+
+function ImageCell({ image, onUpload, onUpdate, onClear, label }) {
+  const inputRef = useRef(null)
+  const pointersRef = useRef(new Map())
+  const gestureRef = useRef(null)
+
+  const reset = () => onUpdate(defaultTransform())
+
+  const handlePointerDown = (event) => {
+    if (!image) return
+    event.currentTarget.setPointerCapture(event.pointerId)
+    pointersRef.current.set(event.pointerId, { x: event.clientX, y: event.clientY })
+    if (pointersRef.current.size === 2) {
+      const [first, second] = pointersRef.current.values()
+      gestureRef.current = {
+        type: 'pinch',
+        distance: Math.hypot(second.x - first.x, second.y - first.y),
+        scale: image.scale,
+      }
+    } else {
+      gestureRef.current = { type: 'pan', x: event.clientX, y: event.clientY, imageX: image.x, imageY: image.y }
+    }
+  }
+
+  const handlePointerMove = (event) => {
+    if (!image || !pointersRef.current.has(event.pointerId)) return
+    pointersRef.current.set(event.pointerId, { x: event.clientX, y: event.clientY })
+    const gesture = gestureRef.current
+    if (!gesture) return
+    if (gesture.type === 'pinch' && pointersRef.current.size === 2) {
+      const [first, second] = pointersRef.current.values()
+      const distance = Math.hypot(second.x - first.x, second.y - first.y)
+      onUpdate({ ...image, scale: Math.max(1, Math.min(4, gesture.scale * distance / gesture.distance)) })
+    } else if (gesture.type === 'pan') {
+      onUpdate({ ...image, x: gesture.imageX + event.clientX - gesture.x, y: gesture.imageY + event.clientY - gesture.y })
+    }
+  }
+
+  const handlePointerUp = (event) => {
+    pointersRef.current.delete(event.pointerId)
+    if (pointersRef.current.size === 1 && image) {
+      const [pointer] = pointersRef.current.values()
+      gestureRef.current = { type: 'pan', x: pointer.x, y: pointer.y, imageX: image.x, imageY: image.y }
+    } else if (pointersRef.current.size === 0) {
+      gestureRef.current = null
+    }
+  }
+
+  const handleFile = (event) => {
+    const [file] = event.target.files
+    if (file?.type.startsWith('image/')) onUpload(URL.createObjectURL(file))
+    event.target.value = ''
+  }
+
+  return <div
+    className={`image-cell-content ${image ? 'has-image' : ''}`}
+    onPointerDown={handlePointerDown}
+    onPointerMove={handlePointerMove}
+    onPointerUp={handlePointerUp}
+    onPointerCancel={handlePointerUp}
+    onDoubleClick={image ? reset : undefined}
+    onWheel={(event) => image && onUpdate({ ...image, scale: Math.max(1, Math.min(4, image.scale - event.deltaY * 0.002)) })}
+  >
+    {image ? <img className="cell-image" src={image.src} alt={label} style={{ transform: `translate(${image.x}px, ${image.y}px) scale(${image.scale})` }} draggable="false" /> : <button type="button" className="add-image" onClick={() => inputRef.current?.click()} aria-label={`Add image to ${label}`}><span>+</span><small>Add photo</small></button>}
+    <input ref={inputRef} className="image-input" type="file" accept="image/*" onChange={handleFile} />
+    {image && <div className="cell-actions" onPointerDown={(event) => event.stopPropagation()}><button type="button" onClick={() => inputRef.current?.click()}>Replace</button><button type="button" onClick={onClear}>Clear</button><button type="button" onClick={reset} aria-label="Reset image position">Reset</button></div>}
+  </div>
+}
 
 function App() {
   const [rows, setRows] = useState([
@@ -18,10 +87,22 @@ function App() {
   ])
   const [aspectIndex, setAspectIndex] = useState(0)
   const [activeRowId, setActiveRowId] = useState(null)
+  const [images, setImages] = useState({})
   const canvasRef = useRef(null)
 
   const updateRows = (updater) => setRows((currentRows) => updater(currentRows))
   const activeRow = rows.find((row) => row.id === activeRowId)
+  const updateImage = (cellId, image) => setImages((currentImages) => ({ ...currentImages, [cellId]: { ...currentImages[cellId], ...image } }))
+  const uploadImage = (cellId, src) => setImages((currentImages) => {
+    if (currentImages[cellId]?.src) URL.revokeObjectURL(currentImages[cellId].src)
+    return { ...currentImages, [cellId]: { src, ...defaultTransform() } }
+  })
+  const clearImage = (cellId) => setImages((currentImages) => {
+    if (currentImages[cellId]?.src) URL.revokeObjectURL(currentImages[cellId].src)
+    const nextImages = { ...currentImages }
+    delete nextImages[cellId]
+    return nextImages
+  })
 
   const addRow = () => updateRows((currentRows) => {
     const size = 1 / (currentRows.length + 1)
@@ -84,7 +165,7 @@ function App() {
       <div ref={canvasRef} className="collage-frame" style={{ '--frame-ratio': ASPECTS[aspectIndex].ratio, aspectRatio: ASPECTS[aspectIndex].value }}>
         {rows.map((row, rowIndex) => <div className={`grid-row ${activeRowId === row.id ? 'is-active' : ''}`} key={row.id} style={{ flex: row.size }} onClick={() => setActiveRowId(row.id)}>
           {row.columns.map((column, columnIndex) => <div className="grid-cell" key={`${row.id}-${columnIndex}`} style={{ flex: column }}>
-            <button type="button" className="add-image" aria-label={`Add image to row ${rowIndex + 1}, cell ${columnIndex + 1}`}><span>+</span><small>Add photo</small></button>
+            <ImageCell image={images[`${row.id}-${columnIndex}`]} onUpload={(src) => uploadImage(`${row.id}-${columnIndex}`, src)} onUpdate={(image) => updateImage(`${row.id}-${columnIndex}`, image)} onClear={() => clearImage(`${row.id}-${columnIndex}`)} label={`row ${rowIndex + 1}, cell ${columnIndex + 1}`} />
             {columnIndex < row.columns.length - 1 && <div className="column-divider" role="separator" aria-orientation="vertical" onPointerDown={(event) => startColumnResize(event, row.id, columnIndex)} />}
           </div>)}
           {rowIndex < rows.length - 1 && <div className="row-divider" role="separator" aria-orientation="horizontal" onPointerDown={(event) => startRowResize(event, rowIndex)} />}
