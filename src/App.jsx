@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
+import packageJson from '../package.json'
 import './App.css'
 
 const ASPECTS = [
@@ -334,6 +335,7 @@ function App() {
         <div className="export-actions"><button type="button" onClick={downloadExport} disabled={exporting}>{exporting ? 'Rendering...' : 'Download'}</button><button type="button" className="share-button" onClick={shareExport} disabled={exporting}>Share</button></div>
       </div>
     </section>
+    <footer className="app-footer"><span>v{packageJson.version}</span><span>Po-Hsuan Huang (aben20807)</span><a href="https://github.com/aben20807/Gridelle" target="_blank" rel="noreferrer">GitHub</a></footer>
   </main>
 }
 
