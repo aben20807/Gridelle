@@ -1,4 +1,4 @@
-import { useRef, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import './App.css'
 
 const ASPECTS = [
@@ -9,9 +9,12 @@ const ASPECTS = [
 ]
 const MIN_ROW = 0.12
 const MIN_CELL = 0.12
+const MIN_SCALE = 0.1
+const MAX_SCALE = 4
 const makeColumns = (count) => Array.from({ length: count }, () => 1 / count)
 const EXPORT_SIZES = [{ width: 1080, height: 1350 }, { width: 1080, height: 1080 }, { width: 1080, height: 566 }, { width: 1080, height: 1920 }]
-const defaultTransform = () => ({ x: 0, y: 0, scale: 1 })
+const defaultTransform = () => ({ x: 0, y: 0, scale: 1, rotation: 0 })
+const getPointerAngle = (first, second) => Math.atan2(second.y - first.y, second.x - first.x) * 180 / Math.PI
 const getForegroundColor = (hexColor) => {
   const red = Number.parseInt(hexColor.slice(1, 3), 16)
   const green = Number.parseInt(hexColor.slice(3, 5), 16)
@@ -21,6 +24,7 @@ const getForegroundColor = (hexColor) => {
 
 function ImageCell({ image, onUpload, onUpdate, onClear, label }) {
   const inputRef = useRef(null)
+  const contentRef = useRef(null)
   const pointersRef = useRef(new Map())
   const gestureRef = useRef(null)
 
@@ -36,6 +40,8 @@ function ImageCell({ image, onUpload, onUpdate, onClear, label }) {
         type: 'pinch',
         distance: Math.hypot(second.x - first.x, second.y - first.y),
         scale: image.scale,
+        angle: getPointerAngle(first, second),
+        rotation: image.rotation,
       }
     } else {
       gestureRef.current = { type: 'pan', x: event.clientX, y: event.clientY, imageX: image.x, imageY: image.y }
@@ -50,7 +56,11 @@ function ImageCell({ image, onUpload, onUpdate, onClear, label }) {
     if (gesture.type === 'pinch' && pointersRef.current.size === 2) {
       const [first, second] = pointersRef.current.values()
       const distance = Math.hypot(second.x - first.x, second.y - first.y)
-      onUpdate({ ...image, scale: Math.max(1, Math.min(4, gesture.scale * distance / gesture.distance)) })
+      onUpdate({
+        ...image,
+        scale: Math.max(MIN_SCALE, Math.min(MAX_SCALE, gesture.scale * distance / gesture.distance)),
+        rotation: gesture.rotation + getPointerAngle(first, second) - gesture.angle,
+      })
     } else if (gesture.type === 'pan') {
       onUpdate({ ...image, x: gesture.imageX + event.clientX - gesture.x, y: gesture.imageY + event.clientY - gesture.y })
     }
@@ -72,16 +82,28 @@ function ImageCell({ image, onUpload, onUpdate, onClear, label }) {
     event.target.value = ''
   }
 
+  useEffect(() => {
+    const element = contentRef.current
+    const handleWheel = (event) => {
+      if (!image || (!event.ctrlKey && !event.altKey)) return
+      event.preventDefault()
+      if (event.altKey) onUpdate({ ...image, rotation: image.rotation - event.deltaY * 0.4 })
+      else onUpdate({ ...image, scale: Math.max(MIN_SCALE, Math.min(MAX_SCALE, image.scale - event.deltaY * 0.002)) })
+    }
+    element?.addEventListener('wheel', handleWheel, { passive: false })
+    return () => element?.removeEventListener('wheel', handleWheel)
+  }, [image, onUpdate])
+
   return <div
+    ref={contentRef}
     className={`image-cell-content ${image ? 'has-image' : ''}`}
     onPointerDown={handlePointerDown}
     onPointerMove={handlePointerMove}
     onPointerUp={handlePointerUp}
     onPointerCancel={handlePointerUp}
     onDoubleClick={image ? reset : undefined}
-    onWheel={(event) => image && onUpdate({ ...image, scale: Math.max(1, Math.min(4, image.scale - event.deltaY * 0.002)) })}
   >
-    {image ? <img className="cell-image" src={image.src} alt={label} style={{ transform: `translate(${image.x}px, ${image.y}px) scale(${image.scale})` }} draggable="false" /> : <button type="button" className="add-image" onClick={() => inputRef.current?.click()} aria-label={`Add image to ${label}`}><span>+</span><small>Add photo</small></button>}
+    {image ? <img className="cell-image" src={image.src} alt={label} style={{ transform: `translate(${image.x}px, ${image.y}px) rotate(${image.rotation}deg) scale(${image.scale})` }} draggable="false" /> : <button type="button" className="add-image" onClick={() => inputRef.current?.click()} aria-label={`Add image to ${label}`}><span>+</span><small>Add photo</small></button>}
     <input ref={inputRef} className="image-input" type="file" accept="image/*" onChange={handleFile} />
     {image && <div className="cell-actions" onPointerDown={(event) => event.stopPropagation()}><button type="button" onClick={() => inputRef.current?.click()}>Replace</button><button type="button" onClick={onClear}>Clear</button><button type="button" onClick={reset} aria-label="Reset image position">Reset</button></div>}
   </div>
@@ -153,6 +175,7 @@ function App() {
           context.rect(cellLeft, rowTop, cellWidth, rowHeight)
           context.clip()
           context.translate(cellLeft + cellWidth / 2 + transform.x * width / frame.width, rowTop + rowHeight / 2 + transform.y * height / frame.height)
+          context.rotate(transform.rotation * Math.PI / 180)
           context.scale(transform.scale, transform.scale)
           context.drawImage(imageElement, -drawWidth / 2, -drawHeight / 2, drawWidth, drawHeight)
           context.restore()
