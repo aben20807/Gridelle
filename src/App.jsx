@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
-import { toCanvas } from 'html-to-image'
+import { domToCanvas } from 'modern-screenshot'
 import packageJson from '../package.json'
 import './App.css'
 
@@ -17,6 +17,16 @@ const makeColumns = (count) => Array.from({ length: count }, () => 1 / count)
 const EXPORT_SIZES = [{ width: 1080, height: 1350 }, { width: 1080, height: 1080 }, { width: 1080, height: 566 }, { width: 1080, height: 1920 }]
 const defaultTransform = () => ({ x: 0, y: 0, scale: 1, rotation: 0 })
 const getPointerAngle = (first, second) => Math.atan2(second.y - first.y, second.x - first.x) * 180 / Math.PI
+const downloadBlob = (blob, filename) => {
+  const url = URL.createObjectURL(blob)
+  const link = document.createElement('a')
+  link.href = url
+  link.download = filename
+  document.body.appendChild(link)
+  link.click()
+  link.remove()
+  window.setTimeout(() => URL.revokeObjectURL(url), 1000)
+}
 const getForegroundColor = (hexColor) => {
   const red = Number.parseInt(hexColor.slice(1, 3), 16)
   const green = Number.parseInt(hexColor.slice(3, 5), 16)
@@ -148,15 +158,22 @@ function App() {
     const frameBounds = frameElement.getBoundingClientRect()
     frameElement.classList.add('is-exporting')
     try {
-      const canvas = await toCanvas(frameElement, {
+      const renderedCanvas = await domToCanvas(frameElement, {
         width: frameBounds.width,
         height: frameBounds.height,
-        canvasWidth: width,
-        canvasHeight: height,
-        pixelRatio: 1,
-        filter: (node) => !(node instanceof HTMLElement && (node.classList.contains('cell-actions') || node.classList.contains('add-image'))),
+        scale: width / frameBounds.width,
+        backgroundColor: emptyCellColor,
+        filter: (element) => !(element instanceof HTMLElement && (element.classList.contains('cell-actions') || element.classList.contains('add-image'))),
       })
-      return await new Promise((resolve) => canvas.toBlob(resolve, exportFormat === 'png' ? 'image/png' : 'image/jpeg', exportFormat === 'png' ? undefined : exportQuality / 100))
+      const exportCanvas = document.createElement('canvas')
+      exportCanvas.width = width
+      exportCanvas.height = height
+      const context = exportCanvas.getContext('2d')
+      if (!context) throw new Error('Unable to create export canvas')
+      context.drawImage(renderedCanvas, 0, 0, width, height)
+      return await new Promise((resolve, reject) => {
+        exportCanvas.toBlob((blob) => blob ? resolve(blob) : reject(new Error('Unable to encode export image')), exportFormat === 'png' ? 'image/png' : 'image/jpeg', exportFormat === 'png' ? undefined : exportQuality / 100)
+      })
     } finally {
       frameElement.classList.remove('is-exporting')
     }
@@ -166,14 +183,10 @@ function App() {
     setExporting(true)
     try {
       const blob = await createExportBlob()
-      const link = document.createElement('a')
-      link.href = URL.createObjectURL(blob)
       const now = new Date()
       const datePart = `${now.getFullYear()}${String(now.getMonth() + 1).padStart(2, '0')}${String(now.getDate()).padStart(2, '0')}`
       const timePart = `${String(now.getHours()).padStart(2, '0')}${String(now.getMinutes()).padStart(2, '0')}${String(now.getSeconds()).padStart(2, '0')}`
-      link.download = `${datePart}_${timePart}.${exportFormat}`
-      link.click()
-      URL.revokeObjectURL(link.href)
+      downloadBlob(blob, `${datePart}_${timePart}.${exportFormat}`)
     } finally {
       setExporting(false)
     }
@@ -185,13 +198,7 @@ function App() {
       const blob = await createExportBlob()
       const file = new File([blob], `gridelle-collage.${exportFormat}`, { type: blob.type })
       if (navigator.canShare?.({ files: [file] }) && navigator.share) await navigator.share({ files: [file], title: 'Gridelle collage' })
-      else {
-        const link = document.createElement('a')
-        link.href = URL.createObjectURL(blob)
-        link.download = file.name
-        link.click()
-        URL.revokeObjectURL(link.href)
-      }
+      else downloadBlob(blob, file.name)
     } finally {
       setExporting(false)
     }
