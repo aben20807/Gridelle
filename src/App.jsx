@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
+import { toCanvas } from 'html-to-image'
 import packageJson from '../package.json'
 import './App.css'
 
@@ -141,80 +142,24 @@ function App() {
     return nextImages
   })
 
-  const loadImage = (src) => new Promise((resolve, reject) => {
-    const image = new Image()
-    image.onload = () => resolve(image)
-    image.onerror = reject
-    image.src = src
-  })
-
   const createExportBlob = async () => {
     const { width, height } = EXPORT_SIZES[aspectIndex]
-    const canvas = document.createElement('canvas')
-    canvas.width = width
-    canvas.height = height
-    const context = canvas.getContext('2d')
-    context.fillStyle = showOuterLine && dividerThickness > 0 ? dividerColor : emptyCellColor
-    context.fillRect(0, 0, width, height)
     const frameElement = canvasRef.current
-    const frame = frameElement.getBoundingClientRect()
-    const scaleX = width / frame.width
-    const scaleY = height / frame.height
-    const cellBounds = new Map(Array.from(frameElement.querySelectorAll('[data-cell-id]'), (cell) => [cell.dataset.cellId, cell.getBoundingClientRect()]))
-    const loadedImages = new Map(await Promise.all(Object.entries(images).map(async ([cellId, image]) => [cellId, [await loadImage(image.src), image]])))
-    rows.forEach((row) => {
-      row.columns.forEach((column, columnIndex) => {
-        const cellId = `${row.id}-${columnIndex}`
-        const bounds = cellBounds.get(cellId)
-        const cellLeft = (bounds.left - frame.left) * scaleX
-        const rowTop = (bounds.top - frame.top) * scaleY
-        const cellWidth = bounds.width * scaleX
-        const rowHeight = bounds.height * scaleY
-        const loaded = loadedImages.get(cellId)
-        if (loaded) {
-          const [imageElement, transform] = loaded
-          const scale = Math.max(cellWidth / imageElement.naturalWidth, rowHeight / imageElement.naturalHeight)
-          const drawWidth = imageElement.naturalWidth * scale
-          const drawHeight = imageElement.naturalHeight * scale
-          context.save()
-          context.beginPath()
-          context.rect(cellLeft, rowTop, cellWidth, rowHeight)
-          context.clip()
-          context.fillStyle = emptyCellColor
-          context.fillRect(cellLeft, rowTop, cellWidth, rowHeight)
-          context.translate(cellLeft + cellWidth / 2 + transform.x * scaleX, rowTop + rowHeight / 2 + transform.y * scaleY)
-          context.rotate(transform.rotation * Math.PI / 180)
-          context.scale(transform.scale, transform.scale)
-          context.drawImage(imageElement, -drawWidth / 2, -drawHeight / 2, drawWidth, drawHeight)
-          context.restore()
-        } else {
-          context.fillStyle = emptyCellColor
-          context.fillRect(cellLeft, rowTop, cellWidth, rowHeight)
-        }
+    const frameBounds = frameElement.getBoundingClientRect()
+    frameElement.classList.add('is-exporting')
+    try {
+      const canvas = await toCanvas(frameElement, {
+        width: frameBounds.width,
+        height: frameBounds.height,
+        canvasWidth: width,
+        canvasHeight: height,
+        pixelRatio: 1,
+        filter: (node) => !(node instanceof HTMLElement && (node.classList.contains('cell-actions') || node.classList.contains('add-image'))),
       })
-    })
-    if (dividerThickness > 0) {
-      context.fillStyle = dividerColor
-      context.globalAlpha = 0.9
-      rows.forEach((row, rowIndex) => {
-        const rowCells = row.columns.map((_, columnIndex) => cellBounds.get(`${row.id}-${columnIndex}`))
-        const firstCell = rowCells[0]
-        const rowTop = (firstCell.top - frame.top) * scaleY
-        const rowBottom = (firstCell.bottom - frame.top) * scaleY
-        rowCells.slice(0, -1).forEach((cell) => {
-          const dividerX = (cell.right - frame.left) * scaleX
-          context.fillRect(dividerX - dividerThickness * scaleX / 2, rowTop, dividerThickness * scaleX, rowBottom - rowTop)
-        })
-        if (rowIndex < rows.length - 1) {
-          const lastCell = rowCells[rowCells.length - 1]
-          const rowLeft = (firstCell.left - frame.left) * scaleX
-          const rowRight = (lastCell.right - frame.left) * scaleX
-          context.fillRect(rowLeft, rowBottom - dividerThickness * scaleY / 2, rowRight - rowLeft, dividerThickness * scaleY)
-        }
-      })
-      context.globalAlpha = 1
+      return await new Promise((resolve) => canvas.toBlob(resolve, exportFormat === 'png' ? 'image/png' : 'image/jpeg', exportFormat === 'png' ? undefined : exportQuality / 100))
+    } finally {
+      frameElement.classList.remove('is-exporting')
     }
-    return new Promise((resolve) => canvas.toBlob(resolve, exportFormat === 'png' ? 'image/png' : 'image/jpeg', exportFormat === 'png' ? undefined : exportQuality / 100))
   }
 
   const downloadExport = async () => {
