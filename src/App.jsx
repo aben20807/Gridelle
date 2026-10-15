@@ -154,17 +154,22 @@ function App() {
     canvas.width = width
     canvas.height = height
     const context = canvas.getContext('2d')
-    context.fillStyle = '#283129'
+    context.fillStyle = showOuterLine && dividerThickness > 0 ? dividerColor : emptyCellColor
     context.fillRect(0, 0, width, height)
-    const frame = canvasRef.current.getBoundingClientRect()
+    const frameElement = canvasRef.current
+    const frame = frameElement.getBoundingClientRect()
+    const scaleX = width / frame.width
+    const scaleY = height / frame.height
+    const cellBounds = new Map(Array.from(frameElement.querySelectorAll('[data-cell-id]'), (cell) => [cell.dataset.cellId, cell.getBoundingClientRect()]))
     const loadedImages = new Map(await Promise.all(Object.entries(images).map(async ([cellId, image]) => [cellId, [await loadImage(image.src), image]])))
-    let rowTop = 0
     rows.forEach((row) => {
-      let cellLeft = 0
-      const rowHeight = row.size * height
       row.columns.forEach((column, columnIndex) => {
-        const cellWidth = column * width
         const cellId = `${row.id}-${columnIndex}`
+        const bounds = cellBounds.get(cellId)
+        const cellLeft = (bounds.left - frame.left) * scaleX
+        const rowTop = (bounds.top - frame.top) * scaleY
+        const cellWidth = bounds.width * scaleX
+        const rowHeight = bounds.height * scaleY
         const loaded = loadedImages.get(cellId)
         if (loaded) {
           const [imageElement, transform] = loaded
@@ -177,7 +182,7 @@ function App() {
           context.clip()
           context.fillStyle = emptyCellColor
           context.fillRect(cellLeft, rowTop, cellWidth, rowHeight)
-          context.translate(cellLeft + cellWidth / 2 + transform.x * width / frame.width, rowTop + rowHeight / 2 + transform.y * height / frame.height)
+          context.translate(cellLeft + cellWidth / 2 + transform.x * scaleX, rowTop + rowHeight / 2 + transform.y * scaleY)
           context.rotate(transform.rotation * Math.PI / 180)
           context.scale(transform.scale, transform.scale)
           context.drawImage(imageElement, -drawWidth / 2, -drawHeight / 2, drawWidth, drawHeight)
@@ -186,36 +191,28 @@ function App() {
           context.fillStyle = emptyCellColor
           context.fillRect(cellLeft, rowTop, cellWidth, rowHeight)
         }
-        cellLeft += cellWidth
       })
-      rowTop += rowHeight
     })
     if (dividerThickness > 0) {
-      context.strokeStyle = dividerColor
-      context.lineWidth = dividerThickness * width / frame.width
-      context.beginPath()
-      let horizontalTop = 0
-      rows.forEach((row, index) => {
-        horizontalTop += row.size * height
-        if (index < rows.length - 1) {
-          context.moveTo(0, horizontalTop)
-          context.lineTo(width, horizontalTop)
+      context.fillStyle = dividerColor
+      context.globalAlpha = 0.9
+      rows.forEach((row, rowIndex) => {
+        const rowCells = row.columns.map((_, columnIndex) => cellBounds.get(`${row.id}-${columnIndex}`))
+        const firstCell = rowCells[0]
+        const rowTop = (firstCell.top - frame.top) * scaleY
+        const rowBottom = (firstCell.bottom - frame.top) * scaleY
+        rowCells.slice(0, -1).forEach((cell) => {
+          const dividerX = (cell.right - frame.left) * scaleX
+          context.fillRect(dividerX - dividerThickness * scaleX / 2, rowTop, dividerThickness * scaleX, rowBottom - rowTop)
+        })
+        if (rowIndex < rows.length - 1) {
+          const lastCell = rowCells[rowCells.length - 1]
+          const rowLeft = (firstCell.left - frame.left) * scaleX
+          const rowRight = (lastCell.right - frame.left) * scaleX
+          context.fillRect(rowLeft, rowBottom - dividerThickness * scaleY / 2, rowRight - rowLeft, dividerThickness * scaleY)
         }
       })
-      let verticalRowTop = 0
-      rows.forEach((row) => {
-        let verticalLeft = 0
-        row.columns.forEach((column, index) => {
-          verticalLeft += column * width
-          if (index < row.columns.length - 1) {
-            context.moveTo(verticalLeft, verticalRowTop)
-            context.lineTo(verticalLeft, verticalRowTop + row.size * height)
-          }
-        })
-        verticalRowTop += row.size * height
-      })
-      if (showOuterLine) context.rect(0, 0, width, height)
-      context.stroke()
+      context.globalAlpha = 1
     }
     return new Promise((resolve) => canvas.toBlob(resolve, exportFormat === 'png' ? 'image/png' : 'image/jpeg', exportFormat === 'png' ? undefined : exportQuality / 100))
   }
@@ -315,7 +312,7 @@ function App() {
     <section className="workspace" aria-label="Collage editor">
       <div ref={canvasRef} className="collage-frame" style={{ '--frame-ratio': ASPECTS[aspectIndex].ratio, '--divider-thickness': `${dividerThickness}px`, '--divider-color': dividerColor, '--outer-line': showOuterLine ? `${dividerThickness}px` : '0px', aspectRatio: ASPECTS[aspectIndex].value }}>
         {rows.map((row, rowIndex) => <div className={`grid-row ${activeRowId === row.id ? 'is-active' : ''}`} key={row.id} style={{ flex: row.size }} onClick={() => setActiveRowId(row.id)}>
-          {row.columns.map((column, columnIndex) => <div className="grid-cell" key={`${row.id}-${columnIndex}`} style={{ flex: column, backgroundColor: images[`${row.id}-${columnIndex}`] ? undefined : emptyCellColor, '--cell-foreground': getForegroundColor(emptyCellColor) }}>
+          {row.columns.map((column, columnIndex) => <div className="grid-cell" data-cell-id={`${row.id}-${columnIndex}`} key={`${row.id}-${columnIndex}`} style={{ flex: column, backgroundColor: emptyCellColor, '--cell-foreground': getForegroundColor(emptyCellColor) }}>
             <ImageCell image={images[`${row.id}-${columnIndex}`]} onUpload={(src) => uploadImage(`${row.id}-${columnIndex}`, src)} onUpdate={(image) => updateImage(`${row.id}-${columnIndex}`, image)} onClear={() => clearImage(`${row.id}-${columnIndex}`)} label={`row ${rowIndex + 1}, cell ${columnIndex + 1}`} />
             {columnIndex < row.columns.length - 1 && <div className="column-divider" role="separator" aria-orientation="vertical" onPointerDown={(event) => startColumnResize(event, row.id, columnIndex)} />}
           </div>)}
