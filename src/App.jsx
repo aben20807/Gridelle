@@ -175,6 +175,8 @@ function App() {
           context.beginPath()
           context.rect(cellLeft, rowTop, cellWidth, rowHeight)
           context.clip()
+          context.fillStyle = emptyCellColor
+          context.fillRect(cellLeft, rowTop, cellWidth, rowHeight)
           context.translate(cellLeft + cellWidth / 2 + transform.x * width / frame.width, rowTop + rowHeight / 2 + transform.y * height / frame.height)
           context.rotate(transform.rotation * Math.PI / 180)
           context.scale(transform.scale, transform.scale)
